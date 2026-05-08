@@ -9,6 +9,7 @@ use serde_json::Value as JsonValue;
 use std::sync::Arc;
 use std::time::Instant;
 use uuid::Uuid;
+use tokio_stream::StreamExt;
 
 /// Wrapper around any BaseChatModel that records LLM call traces.
 pub struct TracingChatModel<M: BaseChatModel> {
@@ -128,7 +129,69 @@ impl<M: BaseChatModel + 'static> BaseChatModel for TracingChatModel<M> {
         messages: &'a [Message],
         config: &'a RunnableConfig,
     ) -> langgraph_prebuilt::MessageStream<'a> {
-        self.inner.astream(messages, config)
+        let store = self.store.clone();
+        let event_bus = self.event_bus.clone();
+        let trace_id = self.trace_id.clone();
+        let parent_span_id = self.parent_span_id.clone();
+        let model_name = self.inner.name().to_string();
+        let input_json = serde_json::to_value(messages).unwrap_or(JsonValue::Null);
+
+        let mut stream = self.inner.astream(messages, config);
+
+        Box::pin(async_stream::stream! {
+            let mut accumulated_message: Option<Message> = None;
+            
+            while let Some(result) = tokio_stream::StreamExt::next(&mut stream).await {
+                if let Ok(ref msg) = result {
+                    match accumulated_message {
+                        None => {
+                            accumulated_message = Some(msg.clone());
+                        }
+                        Some(langgraph_prebuilt::types::Message::Ai { 
+                            content: langgraph_prebuilt::types::MessageContent::Text(ref mut acc_text),
+                            ref mut tool_calls,
+                            ref mut usage,
+                            ..
+                        }) => {
+                            if let langgraph_prebuilt::types::Message::Ai { 
+                                content: langgraph_prebuilt::types::MessageContent::Text(ref msg_text),
+                                tool_calls: ref msg_tools,
+                                usage: ref msg_usage,
+                                ..
+                            } = msg {
+                                acc_text.push_str(msg_text);
+                                for tc in msg_tools {
+                                    if !tool_calls.iter().any(|existing| existing.id == tc.id && tc.id.is_some()) {
+                                        tool_calls.push(tc.clone());
+                                    }
+                                }
+                                if msg_usage.is_some() {
+                                    *usage = msg_usage.clone();
+                                }
+                            }
+                        }
+                        _ => {
+                            // For other message types, just replace (though astream usually only yields AI messages)
+                            accumulated_message = Some(msg.clone());
+                        }
+                    }
+                }
+                yield result;
+            }
+
+            // Record span when stream ends
+            if let Some(final_msg) = accumulated_message {
+                record_llm_span(
+                    store.as_ref(),
+                    &event_bus,
+                    &trace_id,
+                    &parent_span_id,
+                    &model_name,
+                    input_json,
+                    &Ok(final_msg),
+                );
+            }
+        })
     }
 
     fn bind_tools(&self, tools: Vec<ToolDef>) -> Box<dyn BaseChatModel> {
@@ -194,7 +257,68 @@ impl BaseChatModel for DynamicTracingChatModel {
         messages: &'a [Message],
         config: &'a RunnableConfig,
     ) -> langgraph_prebuilt::MessageStream<'a> {
-        self.inner.astream(messages, config)
+        let store = self.store.clone();
+        let event_bus = self.event_bus.clone();
+        let trace_id = self.trace_id.clone();
+        let parent_span_id = self.parent_span_id.clone();
+        let model_name = self.inner.name().to_string();
+        let input_json = serde_json::to_value(messages).unwrap_or(JsonValue::Null);
+
+        let mut stream = self.inner.astream(messages, config);
+
+        Box::pin(async_stream::stream! {
+            let mut accumulated_message: Option<Message> = None;
+            
+            while let Some(result) = tokio_stream::StreamExt::next(&mut stream).await {
+                if let Ok(ref msg) = result {
+                    match accumulated_message {
+                        None => {
+                            accumulated_message = Some(msg.clone());
+                        }
+                        Some(langgraph_prebuilt::types::Message::Ai { 
+                            content: langgraph_prebuilt::types::MessageContent::Text(ref mut acc_text),
+                            ref mut tool_calls,
+                            ref mut usage,
+                            ..
+                        }) => {
+                            if let langgraph_prebuilt::types::Message::Ai { 
+                                content: langgraph_prebuilt::types::MessageContent::Text(ref msg_text),
+                                tool_calls: ref msg_tools,
+                                usage: ref msg_usage,
+                                ..
+                            } = msg {
+                                acc_text.push_str(msg_text);
+                                for tc in msg_tools {
+                                    if !tool_calls.iter().any(|existing| existing.id == tc.id && tc.id.is_some()) {
+                                        tool_calls.push(tc.clone());
+                                    }
+                                }
+                                if msg_usage.is_some() {
+                                    *usage = msg_usage.clone();
+                                }
+                            }
+                        }
+                        _ => {
+                            accumulated_message = Some(msg.clone());
+                        }
+                    }
+                }
+                yield result;
+            }
+
+            // Record span when stream ends
+            if let Some(final_msg) = accumulated_message {
+                record_llm_span(
+                    store.as_ref(),
+                    &event_bus,
+                    &trace_id,
+                    &parent_span_id,
+                    &model_name,
+                    input_json,
+                    &Ok(final_msg),
+                );
+            }
+        })
     }
 
     fn bind_tools(&self, tools: Vec<ToolDef>) -> Box<dyn BaseChatModel> {

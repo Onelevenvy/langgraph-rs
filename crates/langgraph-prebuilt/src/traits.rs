@@ -180,6 +180,33 @@ pub trait BaseChatModel: Send + Sync {
     fn bind_tools(&self, tools: Vec<ToolDef>) -> Box<dyn BaseChatModel>;
 }
 
+#[async_trait]
+impl BaseChatModel for Box<dyn BaseChatModel> {
+    fn name(&self) -> &str {
+        (**self).name()
+    }
+
+    fn invoke(&self, messages: &[Message], config: &RunnableConfig) -> Result<Message, ModelError> {
+        (**self).invoke(messages, config)
+    }
+
+    async fn ainvoke(&self, messages: &[Message], config: &RunnableConfig) -> Result<Message, ModelError> {
+        (**self).ainvoke(messages, config).await
+    }
+
+    fn astream<'a>(
+        &'a self,
+        messages: &'a [Message],
+        config: &'a RunnableConfig,
+    ) -> MessageStream<'a> {
+        (**self).astream(messages, config)
+    }
+
+    fn bind_tools(&self, tools: Vec<ToolDef>) -> Box<dyn BaseChatModel> {
+        (**self).bind_tools(tools)
+    }
+}
+
 /// A simple tool implemented as a closure.
 pub struct ClosureTool {
     tool_name: String,

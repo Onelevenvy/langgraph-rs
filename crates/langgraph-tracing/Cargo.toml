@@ -16,6 +16,7 @@ axum = { version = "0.7", features = ["ws"] }
 tower-http = { version = "0.5", features = ["cors", "fs"] }
 futures = "0.3"
 tokio-stream = { workspace = true }
+async-stream = "0.3"
 
 # Integration with langgraph traits
 langgraph = { path = "../langgraph" }
