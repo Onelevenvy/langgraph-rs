@@ -1,3 +1,4 @@
+use std::fmt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
@@ -194,6 +195,54 @@ impl Message {
             id: None,
             status: "error".to_string(),
         }
+    }
+}
+
+impl fmt::Display for Message {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Message::Human { content, .. } => write!(f, "[Human] {}", content_text(content)),
+            Message::Ai { content, tool_calls, .. } => {
+                let text = content_text(content);
+                if tool_calls.is_empty() {
+                    write!(f, "[AI] {}", text)
+                } else {
+                    let calls: Vec<String> = tool_calls
+                        .iter()
+                        .map(|tc| format!("{}({})", tc.name, tc.args))
+                        .collect();
+                    if text.is_empty() {
+                        write!(f, "[AI] → {}", calls.join(", "))
+                    } else {
+                        write!(f, "[AI] {} → {}", text, calls.join(", "))
+                    }
+                }
+            }
+            Message::System { content, .. } => write!(f, "[System] {}", content_text(content)),
+            Message::Tool { content, name, status, .. } => {
+                let tool_name = name.as_deref().unwrap_or("tool");
+                let text = content_text(content);
+                if status == "error" {
+                    write!(f, "[Tool:{}] ERROR: {}", tool_name, text)
+                } else {
+                    write!(f, "[Tool:{}] {}", tool_name, text)
+                }
+            }
+            Message::Remove { id } => write!(f, "[Remove:{}]", id),
+        }
+    }
+}
+
+fn content_text(content: &MessageContent) -> &str {
+    match content {
+        MessageContent::Text(s) => s.as_str(),
+        MessageContent::Blocks(blocks) => blocks
+            .iter()
+            .find_map(|b| match b {
+                ContentBlock::Text { text } => Some(text.as_str()),
+                _ => None,
+            })
+            .unwrap_or(""),
     }
 }
 

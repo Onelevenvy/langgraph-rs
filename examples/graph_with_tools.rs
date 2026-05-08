@@ -7,12 +7,11 @@ use dotenvy::dotenv;
 use langgraph::prelude::*;
 use langgraph_derive::{tool, StateGraph};
 use langgraph_prebuilt::{
-    prepare_tools, stream_llm, tools_condition, BaseChatModel, Message,
+    prepare_tools, stream_llm, stream_and_print, tools_condition, BaseChatModel, Message,
     ToolNode,
 };
 use langgraph_providers::openai::{OpenAIModel, OpenAIModelConfig};
 use serde::{Deserialize, Serialize};
-use tokio_stream::StreamExt;
 
 fn load_openai_config() -> (String, Option<String>, String) {
     dotenv().ok();
@@ -25,7 +24,7 @@ fn load_openai_config() -> (String, Option<String>, String) {
 }
 
 // -------------------------------------------------------
-// Step 1: Define tools with 
+// Step 1: Define tools with
 // -------------------------------------------------------
 
 #[tool("multiply", "Multiply two integers a and b")]
@@ -127,7 +126,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = graph.compile()?;
 
     // -------------------------------------------------------
-    // Step 4: Invoke with streaming 
+    // Step 4: Invoke with streaming
     // -------------------------------------------------------
 
     let tests = [("Multiply 3 and 4.", 0_i64),
@@ -148,38 +147,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             vec![StreamMode::Custom, StreamMode::Updates],
         );
 
-        use std::io::Write;
-        while let Some(part) = stream.next().await {
-            match part.mode {
-                StreamMode::Custom => {
-                    // Token-by-token typewriter output
-                    if let Some(token_type) = part.data.get("type").and_then(|t| t.as_str()) {
-                        if token_type == "token" {
-                            if let Some(content) = part.data.get("content").and_then(|c| c.as_str()) {
-                                print!("{}", content);
-                                let _ = std::io::stdout().flush();
-                            }
-                        }
-                    }
-                }
-                StreamMode::Updates => {
-                    // Show tool calls from updates
-                    if let Some(obj) = part.data.as_object() {
-                        for (node_name, output) in obj {
-                            if node_name == "tool_node" {
-                                if let Some(messages) = output.get("messages").and_then(|m| m.as_array()) {
-                                    for msg in messages {
-                                        let content = msg.get("content").and_then(|c| c.as_str()).unwrap_or("");
-                                        println!("\n  [tool result] {}", content);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
+        // Use stream_and_print helper — replaces ~15 lines of manual token printing
+        let _ = stream_and_print(&mut stream, false).await;
         println!("\n");
     }
 
@@ -189,4 +158,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-

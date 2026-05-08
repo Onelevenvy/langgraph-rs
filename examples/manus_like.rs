@@ -2,12 +2,11 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-use tokio_stream::StreamExt;
 
 use dotenvy::dotenv;
 use langgraph::prelude::*;
 use langgraph_derive::StateGraph;
-use langgraph_prebuilt::{ask_json, response_text, stream_llm, BaseChatModel, Message};
+use langgraph_prebuilt::{ask_json, response_text, stream_llm, stream_and_print, BaseChatModel, Message};
 use langgraph_providers::openai::{OpenAIModel, OpenAIModelConfig};
 
 fn load_openai_config() -> (String, Option<String>, String) {
@@ -242,29 +241,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("User: 规划深圳的3天旅游.\n");
     let mut stream = app.astream(&input, &RunnableConfig::new(), vec![StreamMode::Custom, StreamMode::Updates]);
-    while let Some(part) = stream.next().await {
-        match part.mode {
-            StreamMode::Custom => {
-                if let Some(token_type) = part.data.get("type").and_then(|t| t.as_str()) {
-                    if token_type == "token" {
-                        if let Some(content) = part.data.get("content").and_then(|c| c.as_str()) {
-                            print!("{}", content);
-                            use std::io::Write;
-                            let _ = std::io::stdout().flush();
-                        }
-                    }
-                }
-            }
-            StreamMode::Updates => {
-                if let Some(obj) = part.data.as_object() {
-                    for (node_name, _) in obj {
-                        println!("\n[update] Node '{}' completed", node_name);
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
+
+    // Use stream_and_print helper — replaces ~15 lines of manual token printing
+    let _ = stream_and_print(&mut stream, true).await;
 
     println!("\n========================================\n  Demo completed!\n========================================");
     Ok(())

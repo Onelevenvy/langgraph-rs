@@ -102,4 +102,4 @@ dmypy.json
 .scratch
 .claude
 langgraph-python-libs
-.clauderules
+CLAUDE.md

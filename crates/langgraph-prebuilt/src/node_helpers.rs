@@ -3,11 +3,14 @@
 //! These utilities eliminate the manual JSON ↔ typed conversion that makes
 //! Rust examples verbose compared to Python's langchain-core.
 
+use std::io::Write;
 use serde_json::Value as JsonValue;
 use tokio_stream::StreamExt;
 use langgraph_checkpoint::config::RunnableConfig;
 use langgraph::config::get_stream_writer;
 use langgraph::runnable::RunnableError;
+use langgraph::stream::StreamPart;
+use langgraph::types::StreamMode;
 
 use crate::traits::BaseChatModel;
 use crate::types::Message;
@@ -243,4 +246,54 @@ pub async fn ask_json(
     let result = stream_llm(model, &input, system_prompt).await?;
     let text = response_text(&result);
     Ok(parse_json_response(text))
+}
+
+/// Stream graph execution and print tokens to stdout in real-time.
+///
+/// Handles the common streaming boilerplate in examples. Tokens from
+/// `StreamMode::Custom` are printed inline (typewriter style). Node
+/// completion updates from `StreamMode::Updates` are printed as `[update]` lines.
+///
+/// Returns the collected token text.
+///
+/// # Example
+/// ```ignore
+/// use langgraph::prelude::*;
+/// use langgraph_prebuilt::stream_and_print;
+///
+/// let mut stream = app.astream(&input, &RunnableConfig::new(), vec![StreamMode::Custom, StreamMode::Updates]);
+/// let text = stream_and_print(&mut stream, true).await;
+/// println!("Final: {}", text);
+/// ```
+pub async fn stream_and_print(
+    stream: &mut (impl StreamExt<Item = StreamPart> + Unpin),
+    print_updates: bool,
+) -> String {
+    let mut collected = String::new();
+
+    while let Some(part) = stream.next().await {
+        match part.mode {
+            StreamMode::Custom => {
+                if let Some(token_type) = part.data.get("type").and_then(|t| t.as_str()) {
+                    if token_type == "token" {
+                        if let Some(content) = part.data.get("content").and_then(|c| c.as_str()) {
+                            print!("{}", content);
+                            let _ = std::io::stdout().flush();
+                            collected.push_str(content);
+                        }
+                    }
+                }
+            }
+            StreamMode::Updates if print_updates => {
+                if let Some(obj) = part.data.as_object() {
+                    for (node_name, _) in obj {
+                        println!("\n[update] Node '{}' completed", node_name);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    collected
 }

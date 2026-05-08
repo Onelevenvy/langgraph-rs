@@ -207,58 +207,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn print_last_message(output: &JsonValue) {
     if let Some(messages) = output.get("messages").and_then(|m| m.as_array()) {
         if let Some(last) = messages.last() {
-            let msg_type = last.get("type").and_then(|t| t.as_str()).unwrap_or("");
-            match msg_type {
-                "human" => {
-                    if let Some(content) = last.get("content").and_then(|c| c.as_str()) {
-                        println!("Human: {}", content);
-                    }
-                }
-                "ai" => {
-                    let content = last
-                        .get("content")
-                        .and_then(|c| c.as_str())
-                        .unwrap_or("");
-                    let has_tools = last
-                        .get("tool_calls")
-                        .and_then(|tc| tc.as_array())
-                        .map(|arr| !arr.is_empty())
-                        .unwrap_or(false);
-                    if has_tools {
-                        println!("AI: [calling tools...]");
-                        if let Some(calls) = last.get("tool_calls").and_then(|tc| tc.as_array()) {
-                            for tc in calls {
-                                let name =
-                                    tc.get("name").and_then(|n| n.as_str()).unwrap_or("?");
-                                let args =
-                                    tc.get("args").map(|a| a.to_string()).unwrap_or_default();
-                                println!("  -> {}({})", name, args);
-                            }
-                        }
-                    } else if !content.is_empty() {
-                        if content.len() > 200 {
-                            println!("AI: {}...", &content[..200]);
-                        } else {
-                            println!("AI: {}", content);
-                        }
-                    }
-                }
-                "tool" => {
-                    let content = last
-                        .get("content")
-                        .and_then(|c| c.as_str())
-                        .unwrap_or("");
-                    let tool_name = last
-                        .get("name")
-                        .and_then(|n| n.as_str())
-                        .unwrap_or("tool");
-                    if content.len() > 100 {
-                        println!("Tool [{}]: {}...", tool_name, &content[..100]);
-                    } else {
-                        println!("Tool [{}]: {}", tool_name, content);
-                    }
-                }
-                _ => {}
+            if let Ok(m) = serde_json::from_value::<Message>(last.clone()) {
+                println!("{}", m);
             }
         }
     }
