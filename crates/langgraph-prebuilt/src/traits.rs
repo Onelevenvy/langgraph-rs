@@ -11,6 +11,14 @@ use crate::types::Message;
 /// (for real-time display) or the final complete message.
 pub type MessageStream<'a> = Pin<Box<dyn tokio_stream::Stream<Item = Result<Message, ModelError>> + Send + 'a>>;
 
+/// Token usage information from an LLM API response.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct LlmUsage {
+    pub prompt_tokens: u32,
+    pub completion_tokens: u32,
+    pub total_tokens: u32,
+}
+
 /// Error type for tool and model operations.
 #[derive(Debug, thiserror::Error)]
 pub enum ToolError {
@@ -170,6 +178,33 @@ pub trait BaseChatModel: Send + Sync {
 
     /// Bind tools to the model for tool-calling support.
     fn bind_tools(&self, tools: Vec<ToolDef>) -> Box<dyn BaseChatModel>;
+}
+
+#[async_trait]
+impl BaseChatModel for Box<dyn BaseChatModel> {
+    fn name(&self) -> &str {
+        (**self).name()
+    }
+
+    fn invoke(&self, messages: &[Message], config: &RunnableConfig) -> Result<Message, ModelError> {
+        (**self).invoke(messages, config)
+    }
+
+    async fn ainvoke(&self, messages: &[Message], config: &RunnableConfig) -> Result<Message, ModelError> {
+        (**self).ainvoke(messages, config).await
+    }
+
+    fn astream<'a>(
+        &'a self,
+        messages: &'a [Message],
+        config: &'a RunnableConfig,
+    ) -> MessageStream<'a> {
+        (**self).astream(messages, config)
+    }
+
+    fn bind_tools(&self, tools: Vec<ToolDef>) -> Box<dyn BaseChatModel> {
+        (**self).bind_tools(tools)
+    }
 }
 
 /// A simple tool implemented as a closure.
