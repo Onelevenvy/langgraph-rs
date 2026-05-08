@@ -58,7 +58,18 @@ export default function TraceDetail({ traceId, onBack }: Props) {
   }
 
   if (loading) return <div className="loading">Loading trace...</div>
-  if (!detail) return <div className="empty">Trace not found</div>
+  if (!detail) return (
+    <div className="trace-detail">
+      <div className="detail-header">
+        <button className="btn btn-back" onClick={onBack}>← Back</button>
+        <h2>Trace Not Found</h2>
+      </div>
+      <div className="empty">
+        <p>The trace with ID <span className="mono">{traceId}</span> could not be found.</p>
+        <button className="btn" style={{ marginTop: '20px' }} onClick={onBack}>Return to List</button>
+      </div>
+    </div>
+  )
 
   const { trace, spans } = detail
 

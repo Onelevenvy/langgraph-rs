@@ -98,7 +98,7 @@ pub async fn start(
 
     let api_routes = Router::new()
         .route("/api/traces", get(list_traces).delete(clear_traces))
-        .route("/api/traces/{trace_id}", get(get_trace))
+        .route("/api/traces/:trace_id", get(get_trace))
         .route("/ws", get(ws_handler))
         .with_state(state);
 
