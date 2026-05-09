@@ -20,4 +20,4 @@ pub use traits::{BaseTool, BaseChatModel, MessageStream, ToolDef, ClosureTool, T
 pub use tool_node::ToolNode;
 pub use chat_agent::{create_react_agent, ReActAgent, ReActAgentConfig};
 pub use tools_condition::tools_condition;
-pub use node_helpers::{extract_messages, llm_response_to_json, invoke_llm, invoke_llm_with_config, stream_llm, get_i64, get_str, response_text, parse_json_response, ask_json, stream_and_print};
+pub use node_helpers::{extract_messages, llm_response_to_json, invoke_llm, invoke_llm_with_config, stream_llm, get_i64, get_str, response_text, parse_json_response, ask_json, print_stream, print_stream_with_options, print_result, print_result_with_options};

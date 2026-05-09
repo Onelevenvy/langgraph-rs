@@ -6,7 +6,7 @@ use serde_json::Value as JsonValue;
 use dotenvy::dotenv;
 use langgraph::prelude::*;
 use langgraph_derive::StateGraph;
-use langgraph_prebuilt::{ask_json, response_text, stream_llm, stream_and_print, BaseChatModel, Message};
+use langgraph_prebuilt::{ask_json, response_text, stream_llm, print_stream, BaseChatModel, Message};
 use langgraph_providers::openai::{OpenAIModel, OpenAIModelConfig};
 
 fn load_openai_config() -> (String, Option<String>, String) {
@@ -242,8 +242,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("User: 规划深圳的3天旅游.\n");
     let mut stream = app.astream(&input, &RunnableConfig::new(), vec![StreamMode::Custom, StreamMode::Updates]);
 
-    // Use stream_and_print helper — replaces ~15 lines of manual token printing
-    let _ = stream_and_print(&mut stream, true).await;
+    // Use print_stream helper — replaces ~15 lines of manual token printing
+    let _ = print_stream(&mut stream, true).await;
 
     println!("\n========================================\n  Demo completed!\n========================================");
     Ok(())

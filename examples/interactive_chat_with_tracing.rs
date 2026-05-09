@@ -7,7 +7,7 @@ use langgraph_checkpoint::checkpoint::memory::InMemorySaver;
 use langgraph_checkpoint::config::RunnableConfigExt;
 use langgraph_derive::{tool, StateGraph, Traceable};
 use langgraph_prebuilt::{
-    prepare_tools, stream_llm, stream_and_print, tools_condition, BaseChatModel, Message,
+    prepare_tools, stream_llm, print_stream, tools_condition, BaseChatModel, Message,
     ToolNode,
 };
 use langgraph_providers::openai::{OpenAIModel, OpenAIModelConfig};
@@ -175,7 +175,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 async move {
                     let mut stream = app.astream(&input, &config, vec![StreamMode::Custom, StreamMode::Updates]);
                     print!("Assistant: ");
-                    let text = stream_and_print(&mut stream, false).await;
+                    let text = print_stream(&mut stream, false).await;
                     println!("\n");
                     json!({"messages": [{"type": "ai", "content": text}]})
                 }

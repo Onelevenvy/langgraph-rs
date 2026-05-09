@@ -4,7 +4,7 @@ use dotenvy::dotenv;
 use langgraph::prelude::*;
 use langgraph::runnable::{RunnableCallable, RunnableError};
 use langgraph_checkpoint::config::RunnableConfig;
-use langgraph_prebuilt::{BaseChatModel, Message};
+use langgraph_prebuilt::{BaseChatModel, Message, print_result};
 use langgraph_providers::openai::OpenAIModel;
 
 fn load_openai_config() -> (String, Option<String>, String) {
@@ -73,7 +73,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!();
 
         match chat_node.ainvoke(&input, &RunnableConfig::new()).await {
-            Ok(output) => print_response(&output),
+            Ok(output) => print_result(&output),
             Err(e) => eprintln!("Error: {}", e),
         }
 
@@ -94,7 +94,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!();
 
         match chat_node.ainvoke(&multi_input, &RunnableConfig::new()).await {
-            Ok(output) => print_response(&output),
+            Ok(output) => print_result(&output),
             Err(e) => eprintln!("Error: {}", e),
         }
 
@@ -102,12 +102,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     })
 }
 
-fn print_response(output: &JsonValue) {
-    if let Some(messages) = output.get("messages").and_then(|m| m.as_array()) {
-        for msg in messages {
-            if let Some(text) = msg.get("content").and_then(|c| c.as_str()) {
-                println!("Assistant: {}", text);
-            }
-        }
-    }
-}

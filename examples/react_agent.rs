@@ -2,7 +2,7 @@
 use dotenvy::dotenv;
 use langgraph_checkpoint::config::RunnableConfig;
 use langgraph_derive::tool;
-use langgraph_prebuilt::{create_react_agent, prepare_tools, ReActAgentConfig};
+use langgraph_prebuilt::{create_react_agent, prepare_tools, print_result, ReActAgentConfig};
 use langgraph_providers::openai::{OpenAIModel, OpenAIModelConfig};
 
 use std::sync::Arc;
@@ -133,32 +133,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
 
         let result = agent.ainvoke(&input, &RunnableConfig::new()).await?;
-        print_agent_response(&result);
+        print_result(&result);
         println!();
     }
 
     Ok(())
 }
 
-fn print_agent_response(output: &serde_json::Value) {
-    if let Some(messages) = output.get("messages").and_then(|m| m.as_array()) {
-        for msg in messages.iter().rev() {
-            if let Some(msg_type) = msg.get("type").and_then(|t| t.as_str()) {
-                if msg_type == "ai" {
-                    if let Some(content) = msg.get("content").and_then(|c| c.as_str()) {
-                        if !content.is_empty() {
-                            println!("Assistant: {}", content);
-                            return;
-                        }
-                    }
-                    if let Some(tool_calls) = msg.get("tool_calls").and_then(|tc| tc.as_array()) {
-                        if !tool_calls.is_empty() {
-                            println!("Assistant: [Called {} tool(s)]", tool_calls.len());
-                            return;
-                        }
-                    }
-                }
-            }
-        }
-    }
-}

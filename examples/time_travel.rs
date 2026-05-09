@@ -9,7 +9,7 @@ use langgraph::prelude::*;
 use langgraph_checkpoint::checkpoint::memory::InMemorySaver;
 use langgraph_derive::{tool, StateGraph};
 use langgraph_prebuilt::{
-    invoke_llm, prepare_tools, tools_condition, BaseChatModel, Message, ToolNode,
+    invoke_llm, prepare_tools, tools_condition, BaseChatModel, Message, ToolNode, print_result,
 };
 use langgraph_providers::openai::{OpenAIModel, OpenAIModelConfig};
 use serde::{Deserialize, Serialize};
@@ -133,7 +133,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let result = app.ainvoke(&input1, &config).await?;
-    print_last_message(&result);
+    print_result(&result);
 
     // -------------------------------------------------------
     // Add steps - second conversation turn
@@ -149,7 +149,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let result = app.ainvoke(&input2, &config).await?;
-    print_last_message(&result);
+    print_result(&result);
 
     // -------------------------------------------------------
     // Replay full state history
@@ -195,21 +195,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let result = app.ainvoke(&JsonValue::Null, &to_replay.config).await?;
 
     println!("Forked execution result:");
-    print_last_message(&result);
+    print_result(&result);
 
     println!("\n========================================");
     println!("  Time Travel Demo completed!");
     println!("========================================");
 
     Ok(())
-}
-
-fn print_last_message(output: &JsonValue) {
-    if let Some(messages) = output.get("messages").and_then(|m| m.as_array()) {
-        if let Some(last) = messages.last() {
-            if let Ok(m) = serde_json::from_value::<Message>(last.clone()) {
-                println!("{}", m);
-            }
-        }
-    }
 }

@@ -9,7 +9,7 @@ use langgraph::prelude::*;
 use langgraph_checkpoint::checkpoint::memory::InMemorySaver;
 use langgraph_derive::{tool, StateGraph};
 use langgraph_prebuilt::{
-    prepare_tools, stream_llm, stream_and_print, tools_condition, BaseChatModel, Message,
+    prepare_tools, stream_llm, print_stream, tools_condition, BaseChatModel, Message,
     ToolNode,
 };
 use langgraph_providers::openai::{OpenAIModel, OpenAIModelConfig};
@@ -166,7 +166,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
 
         print!("Assistant: ");
-        let _ = stream_and_print(&mut stream, false).await;
+        let _ = print_stream(&mut stream, false).await;
         println!("\n");
     }
 

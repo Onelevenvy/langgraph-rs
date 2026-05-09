@@ -536,19 +536,19 @@ impl BaseChatModel for OpenAIModel {
                         if let Some(choice) = chunk.choices.first() {
                             let delta = &choice.delta;
 
-                            // Stream thinking content
+                            // Stream thinking delta — incremental only
                             if let Some(ref thinking) = delta.reasoning_content {
                                 accumulated_thinking.push_str(thinking);
                                 yield Ok(Message::ai_with_thinking("", thinking.clone()));
                             }
 
-                            // Stream answer content
+                            // Stream answer delta — incremental only
                             if let Some(ref content) = delta.content {
                                 accumulated_content.push_str(content);
                                 yield Ok(Message::ai(content.clone()));
                             }
 
-                            // Accumulate tool calls
+                            // Accumulate tool call fragments (not yielded until done)
                             if let Some(calls) = &delta.tool_calls {
                                 for tc in calls {
                                     let idx = tc.index;
@@ -574,25 +574,30 @@ impl BaseChatModel for OpenAIModel {
                 }
             }
 
-            // Build final tool calls
-            let tool_calls: Vec<ToolCall> = tool_call_buffers
-                .into_iter()
-                .filter(|(_, name, _)| !name.is_empty())
-                .map(|(id, name, args)| {
-                    let args_json = serde_json::from_str(&args)
-                        .unwrap_or(serde_json::json!({}));
-                    ToolCall { name, args: args_json, id }
-                })
-                .collect();
+            // After the SSE stream ends, yield ONE final chunk containing only
+            // the assembled tool calls (if any). Content/thinking are left empty
+            // because they have already been streamed incrementally above.
+            // Consumers that only need the final assembled Message (e.g. invoke)
+            // should call `ainvoke` instead. Consumers of `astream` that need
+            // tool calls can detect this chunk via `has_tool_calls()`.
+            if !tool_call_buffers.is_empty() {
+                let tool_calls: Vec<ToolCall> = tool_call_buffers
+                    .into_iter()
+                    .filter(|(_, name, _)| !name.is_empty())
+                    .map(|(id, name, args)| {
+                        let args_json = serde_json::from_str(&args)
+                            .unwrap_or(serde_json::json!({}));
+                        ToolCall { name, args: args_json, id }
+                    })
+                    .collect();
 
-            let mut final_msg = Self::build_message(
-                accumulated_content,
-                tool_calls,
-                if accumulated_thinking.is_empty() { None } else { Some(accumulated_thinking) },
-                usage,
-            );
-
-            yield Ok(final_msg);
+                if !tool_calls.is_empty() {
+                    // Signal chunk: has_tool_calls()=true, text()="", thinking()=None.
+                    // stream_llm uses this to know tool calls are present without
+                    // re-printing any content.
+                    yield Ok(Self::build_message(String::new(), tool_calls, None, usage));
+                }
+            }
         })
     }
 

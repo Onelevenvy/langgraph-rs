@@ -7,7 +7,7 @@ use dotenvy::dotenv;
 use langgraph::prelude::*;
 use langgraph_derive::{tool, StateGraph};
 use langgraph_prebuilt::{
-    prepare_tools, stream_llm, stream_and_print, tools_condition, BaseChatModel, Message,
+    prepare_tools, stream_llm, print_stream, tools_condition, BaseChatModel, Message,
     ToolNode,
 };
 use langgraph_providers::openai::{OpenAIModel, OpenAIModelConfig};
@@ -147,8 +147,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             vec![StreamMode::Custom, StreamMode::Updates],
         );
 
-        // Use stream_and_print helper — replaces ~15 lines of manual token printing
-        let _ = stream_and_print(&mut stream, false).await;
+        // Use print_stream helper — replaces ~15 lines of manual token printing
+        let _ = print_stream(&mut stream, false).await;
         println!("\n");
     }
 
