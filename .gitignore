@@ -104,3 +104,6 @@ dmypy.json
 langgraph-python-libs
 CLAUDE.md
 crates/langgraph-tracing/frontend/node_modules/*
+*.db-wal
+*.db-shm
+*db

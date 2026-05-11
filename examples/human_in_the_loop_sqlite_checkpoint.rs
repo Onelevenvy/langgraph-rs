@@ -2,7 +2,7 @@ use std::sync::Arc;
 use serde_json::Value as JsonValue;
 use dotenvy::dotenv;
 use langgraph::prelude::*;
-use langgraph_checkpoint::checkpoint::memory::InMemorySaver;
+use langgraph_checkpoint_sqlite::SqliteSaver;
 use langgraph_derive::{tool, StateGraph};
 use langgraph_prebuilt::{
     invoke_llm, prepare_tools, tools_condition, BaseChatModel, Message, ToolError, ToolNode,
@@ -117,7 +117,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     graph.add_edge("tools", "chatbot")?;
 
     // Compile with checkpointer
-    let checkpointer = Arc::new(InMemorySaver::new());
+    let saver = SqliteSaver::from_conn_string("sqlite:checkpoints.db").await?;
+    saver.setup().await?; 
+    let checkpointer = Arc::new(saver);
     let app = graph.compile_builder().checkpointer(checkpointer).build()?;
 
     // -------------------------------------------------------
