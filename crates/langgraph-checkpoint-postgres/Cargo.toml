@@ -14,4 +14,4 @@ async-trait = { workspace = true }
 tokio = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "json"] }
+sqlx = { workspace = true, features = ["runtime-tokio", "postgres", "json"] }
