@@ -479,7 +479,7 @@ impl CompiledStateGraph {
         channels: &HashMap<String, Box<dyn Channel>>,
         channel_versions: &ChannelVersions,
         versions_seen: &HashMap<String, HashMap<String, JsonValue>>,
-    ) {
+    ) -> Option<RunnableConfig> {
         use langgraph_checkpoint::checkpoint::id::uuid6;
         use chrono::Utc;
 
@@ -500,7 +500,7 @@ impl CompiledStateGraph {
         };
 
         let metadata = CheckpointMetadata::default();
-        let _ = checkpointer.put(config, &checkpoint, &metadata, channel_versions);
+        checkpointer.put(config, &checkpoint, &metadata, channel_versions).ok()
     }
 
     /// Determine which nodes should execute next given the current state.
@@ -1303,6 +1303,7 @@ impl CompiledStateGraph {
         config: &RunnableConfig,
         stream: Option<&StreamCtx<'_>>,
     ) -> Result<JsonValue, RunnableError> {
+        let mut config = config.clone();
         // ── Setup ────────────────────────────────────────────────────────────
 
         let pregel_nodes = build_pregel_nodes(
@@ -1318,7 +1319,7 @@ impl CompiledStateGraph {
         let mut saved_checkpoint_exists = false;
         let (mut channels, mut channel_versions, mut versions_seen) =
             if let Some(ref cp) = self.checkpointer {
-                match cp.get_tuple(config) {
+                match cp.get_tuple(&config) {
                     Ok(Some(tuple)) => {
                         saved_checkpoint_exists = true;
                         let cp_channels: HashMap<String, Option<JsonValue>> = tuple
@@ -1437,7 +1438,7 @@ impl CompiledStateGraph {
             let mut tasks = prepare_next_tasks(
                 &pregel_nodes,
                 &channels,
-                config,
+                &config,
                 version_offset + step,
                 &mut versions_seen,
                 &trigger_to_nodes,
@@ -1450,6 +1451,9 @@ impl CompiledStateGraph {
             if tasks.is_empty() {
                 break;
             }
+            
+            // Consume pending writes (especially RESUME) so they don't apply to subsequent supersteps
+            pending_writes.clear();
 
             // ── Streaming: emit task-start events ───────────────────────────
             if let Some(s) = stream {
@@ -1470,7 +1474,9 @@ impl CompiledStateGraph {
                 let task_names: Vec<String> = tasks.iter().map(|t| t.name.clone()).collect();
                 if task_names.iter().any(|n| self.interrupt_before.contains(n)) {
                     if let Some(ref cp) = self.checkpointer {
-                        self.save_checkpoint(cp, config, &channels, &channel_versions, &versions_seen);
+                        if let Some(new_config) = self.save_checkpoint(cp, &config, &channels, &channel_versions, &versions_seen) {
+                            config = new_config;
+                        }
                     }
                     // Streaming: emit values before returning
                     if let Some(s) = stream {
@@ -1531,7 +1537,9 @@ impl CompiledStateGraph {
 
                     // Save checkpoint (now includes completed tasks' channel writes)
                     if let Some(ref cp) = self.checkpointer {
-                        self.save_checkpoint(cp, config, &channels, &channel_versions, &versions_seen);
+                        if let Some(new_config) = self.save_checkpoint(cp, &config, &channels, &channel_versions, &versions_seen) {
+                            config = new_config;
+                        }
                         // Save interrupt as pending writes for get_state()
                         let iw: Vec<(String, String, JsonValue)> = interrupt
                             .interrupts
@@ -1542,7 +1550,7 @@ impl CompiledStateGraph {
                             })
                             .collect();
                         if !iw.is_empty() {
-                            if let Err(e) = cp.put_writes(config, &iw, &task_id, "") {
+                            if let Err(e) = cp.put_writes(&config, &iw, &task_id, "") {
                                 eprintln!("[CHECKPOINT] Failed to save interrupt writes: {}", e);
                             }
                         }
@@ -1595,7 +1603,9 @@ impl CompiledStateGraph {
 
             // Save "loop" checkpoint after each completed super-step
             if let Some(ref cp) = self.checkpointer {
-                self.save_checkpoint(cp, config, &channels, &channel_versions, &versions_seen);
+                if let Some(new_config) = self.save_checkpoint(cp, &config, &channels, &channel_versions, &versions_seen) {
+                    config = new_config;
+                }
             }
 
             // ── Streaming: emit values after writes ──────────────────────────

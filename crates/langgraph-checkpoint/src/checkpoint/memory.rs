@@ -299,12 +299,12 @@ impl BaseCheckpointSaver for InMemorySaver {
                 checkpoint_id.clone(),
                 idx as i64,
             );
-            // write_tuple is (String, String, JsonValue) - (channel, type_or_extra, value)
+            // write_tuple is (String, String, JsonValue) - (task_id, channel, value)
             writes_map.insert(
                 key,
                 (
                     task_id.to_string(),
-                    write_tuple.0.clone(),
+                    write_tuple.1.clone(),
                     write_tuple.2.clone(),
                     task_path.to_string(),
                 ),
