@@ -337,6 +337,15 @@ impl From<&str> for MessageContent {
 /// Merge function for messages: appends new messages to existing ones.
 /// This is the default reducer for the `messages` field in agent states.
 pub fn add_messages(current: JsonValue, update: JsonValue) -> JsonValue {
+    // Check if the update is a "Reset" signal: {"reset": true, "messages": [...]}
+    if let Some(obj) = update.as_object() {
+        if obj.get("reset").and_then(|v| v.as_bool()) == Some(true) {
+            if let Some(msgs) = obj.get("messages").and_then(|v| v.as_array()) {
+                return JsonValue::Array(msgs.clone());
+            }
+        }
+    }
+
     let messages: Vec<JsonValue> = match current {
         JsonValue::Array(arr) => arr,
         _ => vec![],
