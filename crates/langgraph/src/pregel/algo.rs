@@ -259,14 +259,12 @@ pub fn apply_writes(
     // 4. Apply writes to channels
     for (chan, vals) in &writes_by_channel {
         if let Some(ch) = channels.get(chan) {
-            let changed = ch.update(vals).unwrap_or(false);
-            // FORCE version bump for branch channels OR when value changed
-            if changed || chan.starts_with("branch:") || chan.starts_with("join:") {
-                // Channel value changed or it's a control channel — bump version
-                let new_ver = get_next_version(channel_versions.get(chan));
-                channel_versions.insert(chan.clone(), new_ver);
-                updated.insert(chan.clone());
-            }
+            let _ = ch.update(vals);
+            // ALWAYS bump version if there was an attempt to write to the channel.
+            // This ensures that downstream nodes are always notified of the activity.
+            let new_ver = get_next_version(channel_versions.get(chan));
+            channel_versions.insert(chan.clone(), new_ver);
+            updated.insert(chan.clone());
         }
     }
 
