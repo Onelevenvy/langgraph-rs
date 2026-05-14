@@ -1,21 +1,38 @@
 use std::collections::{HashMap, HashSet};
 use serde_json::Value as JsonValue;
 use crate::channels::Channel;
-use crate::constants::{TASKS, INTERRUPT, RESUME, NULL_TASK_ID, CONFIG_KEY_SCRATCHPAD, RESERVED};
+use crate::constants::{RESUME, NULL_TASK_ID, CONFIG_KEY_SCRATCHPAD, RESERVED};
 use crate::types::PregelScratchpad;
 use super::{PregelNode, PregelExecutableTask, ChannelVersions, TriggerToNodes};
 
+/// Try to extract a numeric value (f64) from a JsonValue.
+/// Works for JsonValue::Number directly, and for JsonValue::String
+/// that can be parsed as f64.
+fn as_f64(v: &JsonValue) -> Option<f64> {
+    match v {
+        JsonValue::Number(n) => n.as_f64(),
+        JsonValue::String(s) => s.parse::<f64>().ok(),
+        _ => None,
+    }
+}
+
 /// Compare two channel versions. Returns true if `a` > `b`.
-/// Versions are compared as their string representations.
+///
+/// Tries numeric comparison first (via f64), which correctly handles
+/// e.g. 10 > 9. Falls back to string lexical order for non-numeric
+/// version schemes (e.g. UUIDs).
 fn version_gt(a: &JsonValue, b: &JsonValue) -> bool {
+    if let (Some(an), Some(bn)) = (as_f64(a), as_f64(b)) {
+        return an > bn;
+    }
+    // Fallback: string lexical comparison
     let a_str = match a {
-        JsonValue::String(s) => s.clone(),
-        JsonValue::Number(n) => n.to_string(),
+        JsonValue::String(s) => s.as_str(),
+        JsonValue::Number(n) => return n.to_string().as_str() > b.to_string().as_str(),
         _ => return false,
     };
     let b_str = match b {
-        JsonValue::String(s) => s.clone(),
-        JsonValue::Number(n) => n.to_string(),
+        JsonValue::String(s) => s.as_str(),
         _ => return false,
     };
     a_str > b_str
@@ -248,12 +265,13 @@ pub fn apply_writes(
         }
     }
 
-    // 4. Group writes by channel
+    // 4. Group writes by channel.
+    //    Filter out all reserved keys (NO_WRITES, PUSH, RESUME, INTERRUPT,
+    //    RETURN, ERROR, config keys, etc.) — only real channel writes proceed.
     let mut writes_by_channel: HashMap<String, Vec<JsonValue>> = HashMap::new();
     for task in tasks {
         for (chan, val) in &task.writes {
-            // Skip special channels
-            if chan == TASKS || chan == INTERRUPT {
+            if RESERVED.contains(&chan.as_str()) {
                 continue;
             }
             writes_by_channel
@@ -308,8 +326,13 @@ pub fn apply_writes(
 }
 
 /// Helper for comparing versions in max_by.
-/// Returns Ordering::Greater if a > b (string-wise).
+///
+/// Tries numeric comparison first (via f64), falls back to string lexical order.
 fn version_gt_partial(a: &JsonValue, b: &JsonValue) -> std::cmp::Ordering {
+    if let (Some(an), Some(bn)) = (as_f64(a), as_f64(b)) {
+        return an.partial_cmp(&bn).unwrap_or(std::cmp::Ordering::Equal);
+    }
+    // Fallback: string lexical comparison
     let a_str = match a {
         JsonValue::String(s) => s.as_str(),
         JsonValue::Number(n) => return n.to_string().cmp(&b.to_string()),

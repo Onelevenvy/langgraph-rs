@@ -1183,13 +1183,15 @@ fn apply_completed_writes(
         .unwrap_or(0);
     let next_version = JsonValue::String(format!("{:032}", max_ver + 1));
 
-    // Collect and apply writes from completed tasks to channels
+    // Collect and apply writes from completed tasks to channels.
+    // Filter out all reserved keys (matching Python behavior).
     let mut writes_by_channel: HashMap<String, Vec<JsonValue>> = HashMap::new();
     for task in tasks.iter().filter(|t| t.id != interrupted_task_id && !t.writes.is_empty()) {
         for (chan, val) in &task.writes {
-            if chan != crate::constants::TASKS && chan != crate::constants::INTERRUPT {
-                writes_by_channel.entry(chan.clone()).or_default().push(val.clone());
+            if crate::constants::RESERVED.contains(&chan.as_str()) {
+                continue;
             }
+            writes_by_channel.entry(chan.clone()).or_default().push(val.clone());
         }
     }
 
