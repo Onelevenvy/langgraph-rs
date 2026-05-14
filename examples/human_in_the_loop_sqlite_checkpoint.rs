@@ -6,7 +6,6 @@ use langgraph_prebuilt::{
     invoke_llm, prepare_tools, tools_condition, BaseChatModel, Message, ToolError, ToolNode,
 };
 use langgraph_providers::openai::{OpenAIModel, OpenAIModelConfig};
-use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::sync::Arc;
 
@@ -125,12 +124,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // -------------------------------------------------------
     // Step 4: Dynamic Execution Loop
     // -------------------------------------------------------
-
+    let thread_id = uuid::Uuid::new_v4().to_string();
     let mut config = RunnableConfig::new();
     config.insert(
         "configurable".to_string(),
         serde_json::json!({
-            "thread_id": "demo-thread-robust"
+            "thread_id": thread_id
         }),
     );
 
