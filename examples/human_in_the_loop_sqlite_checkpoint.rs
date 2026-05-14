@@ -1,14 +1,14 @@
-use std::sync::Arc;
-use serde_json::Value as JsonValue;
 use dotenvy::dotenv;
 use langgraph::prelude::*;
 use langgraph_checkpoint_sqlite::SqliteSaver;
-use langgraph_derive::{tool, StateGraph};
+use langgraph_derive::{langgraph_state, tool};
 use langgraph_prebuilt::{
     invoke_llm, prepare_tools, tools_condition, BaseChatModel, Message, ToolError, ToolNode,
 };
 use langgraph_providers::openai::{OpenAIModel, OpenAIModelConfig};
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
+use std::sync::Arc;
 
 fn load_openai_config() -> (String, Option<String>, String) {
     dotenv().ok();
@@ -54,8 +54,8 @@ fn get_weather(location: String) -> Result<String, String> {
 // -------------------------------------------------------
 // Step 2: Define state with #[derive(StateGraph)]
 // -------------------------------------------------------
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default, StateGraph)]
+#[langgraph_state]
+#[derive(Debug)]
 struct GraphState {
     #[channel(messages)]
     messages: Vec<Message>,

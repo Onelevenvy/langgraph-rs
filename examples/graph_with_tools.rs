@@ -1,17 +1,16 @@
-
 use std::sync::Arc;
 
 use serde_json::Value as JsonValue;
 
 use dotenvy::dotenv;
 use langgraph::prelude::*;
-use langgraph_derive::{tool, StateGraph};
+use langgraph_derive::{langgraph_state, tool};
 use langgraph_prebuilt::{
-    prepare_tools, stream_llm, print_stream, tools_condition, BaseChatModel, Message,
+    prepare_tools, print_stream, stream_llm, tools_condition, BaseChatModel, Message,
     ToolNode,
 };
 use langgraph_providers::openai::{OpenAIModel, OpenAIModelConfig};
-use serde::{Deserialize, Serialize};
+
 
 fn load_openai_config() -> (String, Option<String>, String) {
     dotenv().ok();
@@ -50,8 +49,8 @@ fn divide(a: f64, b: f64) -> Result<f64, String> {
 // -------------------------------------------------------
 // Step 2: Define state with #[derive(StateGraph)]
 // -------------------------------------------------------
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default, StateGraph)]
+#[langgraph_state]
+#[derive(Debug)]
 struct GraphState {
     #[channel(messages)]
     messages: Vec<Message>,

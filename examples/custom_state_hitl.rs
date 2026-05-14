@@ -1,4 +1,3 @@
-
 use std::sync::Arc;
 
 use serde_json::Value as JsonValue;
@@ -6,12 +5,12 @@ use serde_json::Value as JsonValue;
 use dotenvy::dotenv;
 use langgraph::prelude::*;
 use langgraph_checkpoint::checkpoint::memory::InMemorySaver;
-use langgraph_derive::{tool, StateGraph};
+use langgraph_derive::{langgraph_state, tool};
 use langgraph_prebuilt::{
     invoke_llm, prepare_tools, tools_condition, BaseChatModel, Message, ToolError, ToolNode,
 };
 use langgraph_providers::openai::{OpenAIModel, OpenAIModelConfig};
-use serde::{Deserialize, Serialize};
+
 
 fn load_openai_config() -> (String, Option<String>, String) {
     dotenv().ok();
@@ -112,7 +111,9 @@ fn search(query: String) -> Result<String, String> {
 // Step 2: Define custom state
 // -------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, StateGraph)]
+// ...
+#[langgraph_state]
+#[derive(Debug)]
 struct GraphState {
     #[channel(messages)]
     messages: Vec<Message>,

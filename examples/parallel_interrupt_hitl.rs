@@ -16,16 +16,17 @@
 
 use std::sync::Arc;
 
-use serde::{Deserialize, Serialize};
+
 use serde_json::{json, Value as JsonValue};
 
 use langgraph::prelude::*;
 use langgraph_checkpoint::checkpoint::memory::InMemorySaver;
-use langgraph_derive::StateGraph;
+use langgraph_derive::langgraph_state;
 
 // ── State ─────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, StateGraph)]
+#[langgraph_state]
+#[derive(Debug)]
 struct PipelineState {
     #[channel(messages)]
     log: Vec<String>,

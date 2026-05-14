@@ -1,12 +1,11 @@
 use std::sync::Arc;
 
-use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
 use dotenvy::dotenv;
 use langgraph::prelude::*;
-use langgraph_derive::StateGraph;
-use langgraph_prebuilt::{ask_json, response_text, stream_llm, print_stream, BaseChatModel, Message};
+use langgraph_derive::langgraph_state;
+use langgraph_prebuilt::{ask_json, print_stream, response_text, stream_llm, BaseChatModel, Message};
 use langgraph_providers::openai::{OpenAIModel, OpenAIModelConfig};
 
 fn load_openai_config() -> (String, Option<String>, String) {
@@ -22,7 +21,8 @@ fn load_openai_config() -> (String, Option<String>, String) {
 // State
 // -------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, StateGraph)]
+#[langgraph_state]
+#[derive(Debug)]
 struct ManusState {
     #[channel(messages)]
     messages: Vec<Message>,

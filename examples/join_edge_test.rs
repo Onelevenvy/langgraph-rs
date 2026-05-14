@@ -1,22 +1,12 @@
-/// join_edge_test.rs
-///
-/// Tests `add_join_edge`: a fan-in node that waits for ALL upstream nodes
-/// to complete before it runs.
-///
-/// Graph:
-///   START → entry → worker_a ─┐
-///                  → worker_b ─┴→ merger (join) → output → END
-///
-
-use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as JsonValue};
 
+
 use langgraph::prelude::*;
-use langgraph_derive::StateGraph;
+use langgraph_derive::langgraph_state;
 
 // ── State ─────────────────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default, StateGraph)]
+#[langgraph_state]
+#[derive(Debug)]
 struct FanInState {
     #[channel(messages)]
     log: Vec<String>,
