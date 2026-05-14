@@ -8,18 +8,9 @@ use syn::{parse_macro_input, DeriveInput, Data, Fields, Attribute, Lit, ItemFn, 
 /// a reducer function for that channel. Fields without the attribute
 /// use LastValue (default).
 ///
-/// # Example
-///
-/// ```rust,ignore
-/// fn add_messages(current: &JsonValue, update: &JsonValue) -> JsonValue { /* ... */ }
-///
-/// #[derive(Debug, Clone, Serialize, Deserialize, Default, StateGraph)]
-/// struct MyState {
-///     #[channel(reducer = "add_messages")]
-///     messages: Vec<Message>,
-///     value: i64,  // defaults to LastValue
-/// }
-/// ```
+/// **Robustness Check**: This macro enforces that every field must have 
+/// `#[serde(default)]` (or be an `Option` which handles missing keys gracefully).
+/// This prevents silent state loss during graph resume operations.
 #[proc_macro_derive(StateGraph, attributes(channel))]
 pub fn derive_state_graph(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -37,6 +28,35 @@ fn impl_state_graph(input: &DeriveInput) -> TokenStream {
         },
         _ => panic!("StateGraph can only be derived for structs"),
     };
+
+    // ── ROBUSTNESS CHECK ─────────────────────────────────────────────────────
+    // For every field, ensure it has #[serde(default)]
+    for field in fields {
+        let field_name = field.ident.as_ref().unwrap();
+        
+        let mut has_serde_default = false;
+        for attr in &field.attrs {
+            if attr.path().is_ident("serde") {
+                let _ = attr.parse_nested_meta(|meta| {
+                    if meta.path.is_ident("default") {
+                        has_serde_default = true;
+                    }
+                    Ok(())
+                });
+            }
+        }
+
+        if !has_serde_default {
+            let error_msg = format!(
+                "Field `{}` in `{}` is missing `#[serde(default)]`. \
+                 LangGraph states require this attribute on all fields to prevent \
+                 state loss during resume operations. Please add `#[serde(default)]` \
+                 to this field.",
+                field_name, name
+            );
+            return syn::Error::new_spanned(field, error_msg).to_compile_error().into();
+        }
+    }
 
     let channel_registrations: Vec<proc_macro2::TokenStream> = fields
         .iter()
@@ -85,10 +105,6 @@ fn impl_state_graph(input: &DeriveInput) -> TokenStream {
 
     let expanded = quote! {
         impl #impl_generics #name #ty_generics #where_clause {
-            /// Generate channels from the state struct fields.
-            /// Fields with #[channel(reducer = "fn")] get BinaryOperatorAggregate,
-            /// #[channel(messages)] uses the built-in add_messages reducer,
-            /// others get LastValue.
             pub fn create_channels() -> std::collections::HashMap<String, Box<dyn langgraph::channels::Channel>> {
                 let mut channels = std::collections::HashMap::new();
                 #(#channel_registrations)*
@@ -143,26 +159,6 @@ fn get_channel_reducer(attrs: &[Attribute]) -> Option<ReducerSpec> {
 // ============================================================================
 
 /// Attribute macro to define a tool from a function.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// use langgraph_derive::tool;
-///
-/// #[tool("get_weather", "Get the current weather for a location")]
-/// fn get_weather(location: String) -> String {
-///     format!("Weather for {}: sunny, 22°C", location)
-/// }
-///
-/// // Usage:
-/// let tool = GetWeather::new();
-/// let tools: Vec<Arc<dyn BaseTool>> = vec![Arc::new(tool)];
-/// ```
-///
-/// The macro generates:
-/// - A CamelCase struct (e.g., `GetWeather`)
-/// - `BaseTool` trait implementation with auto-generated JSON schema
-/// - `new()` and `Default` impls
 #[proc_macro_attribute]
 pub fn tool(attr: TokenStream, item: TokenStream) -> TokenStream {
     let func = parse_macro_input!(item as ItemFn);
@@ -195,7 +191,6 @@ fn impl_tool_macro(name_lit: &Option<Lit>, desc_lit: &Option<Lit>, func: &ItemFn
     let fn_name = &func.sig.ident;
     let fn_name_str = fn_name.to_string();
 
-    // Get tool name and description as strings
     let tool_name = if let Some(Lit::Str(s)) = name_lit {
         s.value()
     } else {
@@ -208,7 +203,6 @@ fn impl_tool_macro(name_lit: &Option<Lit>, desc_lit: &Option<Lit>, func: &ItemFn
             _ => panic!("description must be a string literal"),
         }
     } else {
-        // Extract from doc attributes
         let mut extracted_desc = String::new();
         for attr in &func.attrs {
             if attr.path().is_ident("doc") {
@@ -229,11 +223,9 @@ fn impl_tool_macro(name_lit: &Option<Lit>, desc_lit: &Option<Lit>, func: &ItemFn
         extracted_desc
     };
 
-    // Generate CamelCase struct name
     let struct_name_str = to_camel_case(&fn_name_str);
     let struct_name = syn::Ident::new(&struct_name_str, fn_name.span());
 
-    // Extract parameters (filter out self params)
     let params: Vec<_> = func.sig.inputs.iter().filter_map(|arg| {
         if let syn::FnArg::Typed(pat_type) = arg {
             if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
@@ -243,7 +235,6 @@ fn impl_tool_macro(name_lit: &Option<Lit>, desc_lit: &Option<Lit>, func: &ItemFn
         None
     }).collect();
 
-    // Generate JSON schema properties
     let properties: Vec<proc_macro2::TokenStream> = params.iter().map(|(name, ty)| {
         let name_str = name.to_string();
         let actual_ty = if is_option(ty) { extract_type_from_option(ty) } else { ty };
@@ -258,7 +249,6 @@ fn impl_tool_macro(name_lit: &Option<Lit>, desc_lit: &Option<Lit>, func: &ItemFn
         .map(|(name, _)| name.to_string())
         .collect();
 
-    // Generate parameter extraction code
     let extractions: Vec<proc_macro2::TokenStream> = params.iter().map(|(name, ty)| {
         let name_str = name.to_string();
         let err_invalid = format!("invalid parameter '{}': {{}}", name_str);
@@ -287,7 +277,6 @@ fn impl_tool_macro(name_lit: &Option<Lit>, desc_lit: &Option<Lit>, func: &ItemFn
 
     let param_names: Vec<_> = params.iter().map(|(name, _)| name.clone()).collect();
 
-    // Generate the invoke body based on return type
     let is_result_return = match &func.sig.output {
         ReturnType::Type(_, ty) => {
             if let syn::Type::Path(type_path) = ty.as_ref() {
@@ -301,10 +290,8 @@ fn impl_tool_macro(name_lit: &Option<Lit>, desc_lit: &Option<Lit>, func: &ItemFn
         _ => false,
     };
 
-    // Determine if the function is async
     let is_async = func.sig.asyncness.is_some();
 
-    // Generate the invoke body based on return type and asyncness
     let await_tokens = if is_async {
         quote! { .await }
     } else {
@@ -367,30 +354,18 @@ fn impl_tool_macro(name_lit: &Option<Lit>, desc_lit: &Option<Lit>, func: &ItemFn
     };
 
     let expanded = quote! {
-        // Keep the original function
         #func
-
-        /// Auto-generated tool struct from #[tool] macro.
         pub struct #struct_name;
-
         impl #struct_name {
             pub fn new() -> Self { Self }
         }
-
         impl Default for #struct_name {
             fn default() -> Self { Self }
         }
-
         #[async_trait::async_trait]
         impl langgraph_prebuilt::BaseTool for #struct_name {
-            fn name(&self) -> &str {
-                #tool_name
-            }
-
-            fn description(&self) -> &str {
-                #description
-            }
-
+            fn name(&self) -> &str { #tool_name }
+            fn description(&self) -> &str { #description }
             fn parameters(&self) -> Option<&serde_json::Value> {
                 use std::sync::OnceLock;
                 static SCHEMA: OnceLock<serde_json::Value> = OnceLock::new();
@@ -409,7 +384,6 @@ fn impl_tool_macro(name_lit: &Option<Lit>, desc_lit: &Option<Lit>, func: &ItemFn
                     })
                 }))
             }
-
             #trait_methods
         }
     };
@@ -448,30 +422,8 @@ fn rust_type_to_json_type(ty: &syn::Type) -> &'static str {
 }
 
 // ============================================================================
-// #[derive(Traceable)] - auto-generate tracing context
+// #[derive(Traceable)]
 // ============================================================================
-
-/// Derive macro that generates a `tracing_context()` method on the struct.
-///
-/// When combined with `#[derive(StateGraph)]`, this adds one-liner tracing setup.
-/// Comment out the derive to disable tracing entirely.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// #[derive(Debug, Clone, Serialize, Deserialize, Default, StateGraph, Traceable)]
-/// struct GraphState {
-///     #[channel(messages)]
-///     messages: Vec<Message>,
-/// }
-///
-/// // Usage:
-/// let mut tracing = GraphState::tracing_context();
-/// tracing.start_server("127.0.0.1:3333");
-/// let output = tracing.run_with_tracing("my_graph", input, |config| {
-///     // use config with app.astream() or app.invoke()
-/// }).await;
-/// ```
 #[proc_macro_derive(Traceable)]
 pub fn derive_traceable(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -481,20 +433,13 @@ pub fn derive_traceable(input: TokenStream) -> TokenStream {
 fn impl_traceable(input: &DeriveInput) -> TokenStream {
     let name = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-
     let expanded = quote! {
         impl #impl_generics #name #ty_generics #where_clause {
-            /// Create a tracing context for this graph.
-            ///
-            /// Returns a `TracingContext` that bundles store, event bus,
-            /// and observer. Use `start_server()` to launch the UI,
-            /// and `run_with_tracing()` to execute the graph with tracing.
             pub fn tracing_context() -> langgraph_tracing::TracingContext {
                 langgraph_tracing::TracingContext::new()
             }
         }
     };
-
     TokenStream::from(expanded)
 }
 

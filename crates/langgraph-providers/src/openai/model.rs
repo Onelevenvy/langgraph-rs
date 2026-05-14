@@ -306,7 +306,8 @@ impl OpenAIModel {
                     };
                     Some(RawMessage {
                         role: "assistant".to_string(),
-                        content: if text.is_empty() { None } else { Some(text) },
+                        // content: if text.is_empty() { None } else { Some(text) },
+                        content: Some(text),
                         tool_calls: tc,
                         tool_call_id: None,
                     })
