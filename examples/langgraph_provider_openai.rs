@@ -4,7 +4,7 @@ use dotenvy::dotenv;
 use langgraph::prelude::*;
 use langgraph::runnable::{RunnableCallable, RunnableError};
 use langgraph_checkpoint::config::RunnableConfig;
-use langgraph_prebuilt::{BaseChatModel, Message, print_result};
+use langgraph_prebuilt::{print_result, BaseChatModel, Message};
 use langgraph_providers::openai::OpenAIModel;
 
 fn load_openai_config() -> (String, Option<String>, String) {

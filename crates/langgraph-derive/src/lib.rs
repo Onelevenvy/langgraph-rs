@@ -17,6 +17,59 @@ pub fn derive_state_graph(input: TokenStream) -> TokenStream {
     impl_state_graph(&input)
 }
 
+
+/// This attribute macro:
+/// 1. Automatically adds `#[derive(serde::Serialize, serde::Deserialize, Clone, Default, StateGraph)]`.
+/// 2. Automatically injects `#[serde(default)]` on every field to ensure robustness.
+/// 
+/// Usage:
+/// ```rust,ignore
+/// #[langgraph_state]
+/// struct MyState {
+///     #[channel(messages)]
+///     messages: Vec<Message>,
+///     other_field: String,
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn langgraph_state(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let mut input = parse_macro_input!(item as syn::ItemStruct);
+    
+    // 1. Add the "big bunch" of derives
+    input.attrs.push(syn::parse_quote! {
+        #[derive(serde::Serialize, serde::Deserialize, Clone, Default, langgraph_derive::StateGraph)]
+    });
+
+    // 2. Walk fields and ensure #[serde(default)] exists
+    if let syn::Fields::Named(fields) = &mut input.fields {
+        for field in &mut fields.named {
+            let mut has_default = false;
+            for attr in &field.attrs {
+                if attr.path().is_ident("serde") {
+                    let _ = attr.parse_nested_meta(|meta| {
+                        if meta.path.is_ident("default") {
+                            has_default = true;
+                        }
+                        Ok(())
+                    });
+                }
+            }
+
+            if !has_default {
+                field.attrs.push(syn::parse_quote! {
+                    #[serde(default)]
+                });
+            }
+        }
+    }
+
+    let expanded = quote! {
+        #input
+    };
+
+    TokenStream::from(expanded)
+}
+
 fn impl_state_graph(input: &DeriveInput) -> TokenStream {
     let name = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();

@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use langgraph_checkpoint::checkpoint::base::BaseCheckpointSaver;
 use langgraph_checkpoint::checkpoint::types::{
-    Checkpoint, CheckpointMetadata, CheckpointSource, ChannelVersions,
+    ChannelVersions, Checkpoint, CheckpointMetadata, CheckpointSource,
 };
 use langgraph_checkpoint::config::RunnableConfig;
 use langgraph_checkpoint_sqlite::SqliteSaver;

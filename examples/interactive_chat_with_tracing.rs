@@ -1,17 +1,17 @@
-use std::io::{self, Write};
-use std::sync::Arc;
-use serde_json::{json, Value as JsonValue};
 use dotenvy::dotenv;
 use langgraph::prelude::*;
 use langgraph_checkpoint::checkpoint::memory::InMemorySaver;
 use langgraph_checkpoint::config::RunnableConfigExt;
-use langgraph_derive::{tool, StateGraph, Traceable};
+use langgraph_derive::{langgraph_state, tool, Traceable};
 use langgraph_prebuilt::{
-    prepare_tools, stream_llm, print_stream, tools_condition, BaseChatModel, Message,
+    prepare_tools, print_stream, stream_llm, tools_condition, BaseChatModel, Message,
     ToolNode,
 };
 use langgraph_providers::openai::{OpenAIModel, OpenAIModelConfig};
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value as JsonValue};
+use std::io::{self, Write};
+use std::sync::Arc;
 
 // Tracing imports - only TracingChatModel needed for LLM wrapping
 use langgraph_tracing::TracingChatModel;
@@ -47,7 +47,8 @@ fn get_weather(location: String) -> Result<String, String> {
 // State
 // -------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, StateGraph, Traceable)]
+#[langgraph_state]
+#[derive(Debug, Traceable)]
 struct GraphState {
     #[channel(messages)]
     messages: Vec<Message>,

@@ -1,10 +1,9 @@
-
 use langgraph::prelude::*;
-use langgraph_derive::StateGraph;
+use langgraph_derive::langgraph_state;
 use langgraph_prebuilt::Message;
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, StateGraph)]
+#[langgraph_state]
+#[derive(Debug)]
 struct AgentState {
     #[channel(messages)]
     messages: Vec<Message>,
