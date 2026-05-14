@@ -1392,8 +1392,12 @@ impl CompiledStateGraph {
         };
         let is_fork = input.is_null() && saved_checkpoint_exists;
 
-        // Write input to channels on a fresh invocation OR when providing new input to a resumed thread
-        if !is_fork && (!is_resuming || !input.is_null()) {
+        // Write input to channels on a fresh invocation only.
+        // When resuming from an interrupt (is_resuming=true), the checkpoint already
+        // has the full state; we must NOT re-trigger START because that would restart
+        // the entire graph (compaction → llm → tools) from scratch, causing the
+        // "memory confusion" / spurious LLM re-runs observed after tool denial.
+        if !is_fork && !is_resuming {
             let input_writes = map_input(&[START.to_string()], input);
             for (chan, val) in &input_writes {
                 if let Some(ch) = channels.get(chan) {
@@ -1429,6 +1433,7 @@ impl CompiledStateGraph {
                 }
             }
         }
+
 
         // ── Super-step loop ──────────────────────────────────────────────────
 
@@ -1603,6 +1608,16 @@ impl CompiledStateGraph {
                 &trigger_to_nodes,
                 bump_version,
             );
+
+            // ── DEBUG: 打印 apply_writes 后 messages channel 状态 ──
+            // {
+            //     let task_names: Vec<&str> = tasks.iter().map(|t| t.name.as_str()).collect();
+            //     let msg_count = channels.get("messages")
+            //         .and_then(|ch| ch.get().ok())
+            //         .and_then(|v| v.as_array().map(|a| a.len()))
+            //         .unwrap_or(0);
+            //     eprintln!("[DEBUG][pregel] step={} tasks={:?} after apply_writes: messages.len={}", step, task_names, msg_count);
+            // }
 
             // Save "loop" checkpoint after each completed super-step
             if let Some(ref cp) = self.checkpointer {
