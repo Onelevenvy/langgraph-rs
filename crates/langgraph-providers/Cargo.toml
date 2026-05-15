@@ -22,8 +22,7 @@ reqwest = { version = "0.12", features = ["json", "stream"] }
 reqwest-eventsource = "0.6"
 
 [features]
-default = ["openai"]
+default = ["openai", "anthropic"]
 openai = []
 anthropic = []
-bedrock = []
-vertex = []
+
