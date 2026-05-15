@@ -8,6 +8,8 @@ use langgraph_prebuilt::{
     BaseChatModel, LlmUsage, Message, MessageStream, ModelError, ToolCall, ToolDef,
 };
 
+use crate::common;
+
 // ── Request types ──────────────────────────────────────────────────
 
 #[derive(Serialize)]
@@ -274,7 +276,7 @@ impl OpenAIModel {
             .filter_map(|msg| match msg {
                 Message::Human { content, .. } => Some(RawMessage {
                     role: "user".to_string(),
-                    content: Some(content_text(content)),
+                    content: Some(common::content_text(content)),
                     tool_calls: None,
                     tool_call_id: None,
                     reasoning_content: None,
@@ -285,7 +287,7 @@ impl OpenAIModel {
                     thinking,
                     ..
                 } => {
-                    let text = content_text(content);
+                    let text = common::content_text(content);
                     let tc = if tool_calls.is_empty() {
                         None
                     } else {
@@ -318,7 +320,7 @@ impl OpenAIModel {
                 }
                 Message::System { content, .. } => Some(RawMessage {
                     role: "system".to_string(),
-                    content: Some(content_text(content)),
+                    content: Some(common::content_text(content)),
                     tool_calls: None,
                     tool_call_id: None,
                     reasoning_content: None,
@@ -329,7 +331,7 @@ impl OpenAIModel {
                     ..
                 } => Some(RawMessage {
                     role: "tool".to_string(),
-                    content: Some(content_text(content)),
+                    content: Some(common::content_text(content)),
                     tool_calls: None,
                     tool_call_id: Some(tool_call_id.clone()),
                     reasoning_content: None,
@@ -366,29 +368,6 @@ impl OpenAIModel {
         }
     }
 
-    fn build_message(
-        content: String,
-        tool_calls: Vec<ToolCall>,
-        thinking: Option<String>,
-        usage: Option<LlmUsage>,
-    ) -> Message {
-        let mut msg = match (tool_calls.is_empty(), usage) {
-            (true, None) => Message::ai(content),
-            (true, Some(u)) => Message::ai_with_usage(content, u),
-            (false, None) => Message::ai_with_tool_calls(content, tool_calls),
-            (false, Some(u)) => Message::ai_with_tool_calls_and_usage(content, tool_calls, u),
-        };
-        if let Some(t) = thinking {
-            if let Message::Ai {
-                thinking: ref mut th,
-                ..
-            } = msg
-            {
-                *th = Some(t);
-            }
-        }
-        msg
-    }
 }
 
 #[async_trait]
@@ -402,16 +381,7 @@ impl BaseChatModel for OpenAIModel {
         messages: &[Message],
         _config: &RunnableConfig,
     ) -> Result<Message, ModelError> {
-        match tokio::runtime::Handle::try_current() {
-            Ok(handle) => {
-                tokio::task::block_in_place(|| handle.block_on(self.ainvoke(messages, _config)))
-            }
-            Err(_) => {
-                let rt = tokio::runtime::Runtime::new()
-                    .map_err(|e| ModelError::Invocation(e.to_string()))?;
-                rt.block_on(self.ainvoke(messages, _config))
-            }
-        }
+        common::invoke_sync(self.ainvoke(messages, _config))
     }
 
     async fn ainvoke(
@@ -485,7 +455,7 @@ impl BaseChatModel for OpenAIModel {
             })
             .unwrap_or_default();
 
-        Ok(Self::build_message(content, tool_calls, thinking, usage))
+        Ok(common::build_ai_message(content, tool_calls, thinking, usage))
     }
 
     fn astream<'a>(
@@ -598,9 +568,9 @@ impl BaseChatModel for OpenAIModel {
                     })
                     .collect();
 
-                yield Ok(Self::build_message(String::new(), tool_calls, None, usage));
+                yield Ok(common::build_ai_message(String::new(), tool_calls, None, usage));
             } else if usage.is_some() {
-                yield Ok(Self::build_message(String::new(), Vec::new(), None, usage));
+                yield Ok(common::build_ai_message(String::new(), Vec::new(), None, usage));
             }
         })
     }
@@ -666,22 +636,6 @@ impl BaseChatModel for OpenAICompatModel {
 
     fn bind_tools(&self, tools: Vec<ToolDef>) -> Box<dyn BaseChatModel> {
         self.inner.bind_tools(tools)
-    }
-}
-
-// ── Helpers ────────────────────────────────────────────────────────
-
-fn content_text(content: &langgraph_prebuilt::MessageContent) -> String {
-    match content {
-        langgraph_prebuilt::MessageContent::Text(s) => s.clone(),
-        langgraph_prebuilt::MessageContent::Blocks(blocks) => blocks
-            .iter()
-            .filter_map(|b| match b {
-                langgraph_prebuilt::ContentBlock::Text { text } => Some(text.as_str()),
-                _ => None,
-            })
-            .collect::<Vec<_>>()
-            .join(""),
     }
 }
 

@@ -1,10 +1,11 @@
 //! Provider integrations for LangGraph.
 //!
-//! This crate provides concrete implementations of `BaseChatModel` and `BaseTool`
+//! This crate provides concrete implementations of `BaseChatModel`
 //! for popular LLM providers.
 //!
 //! # Supported Providers
-//! - **OpenAI** — via `async-openai` crate (GPT-4o, GPT-4, o1, etc.)
+//! - **OpenAI** — GPT-4o, GPT-4, o1, DeepSeek, and OpenAI-compatible endpoints
+//! - **Anthropic** — Claude models (Claude 4, Claude 3.5, etc.)
 //!
 //! # Example
 //! ```rust,no_run
@@ -31,4 +32,10 @@
 //! # }
 //! ```
 
+mod common;
+
+#[cfg(feature = "openai")]
 pub mod openai;
+
+#[cfg(feature = "anthropic")]
+pub mod anthropic;
