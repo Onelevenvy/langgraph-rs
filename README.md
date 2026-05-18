@@ -5,6 +5,7 @@ A Rust implementation of [LangGraph](https://github.com/langchain-ai/langgraph) 
 ## Table of Contents
 
 - [Overview](#overview)
+- [Projects Built with langgraph-rust](#projects-built-with-langgraph-rust)
 - [Project Structure](#project-structure)
 - [Quick Start](#quick-start)
 - [Supported Providers](#supported-providers)
@@ -26,6 +27,9 @@ langgraph-rust brings the core LangGraph concepts into idiomatic Rust:
 - **Tracing & Observability** -- Real-time tracing server and UI for visualizing graph execution and LLM calls.
 - **ReAct Agent** -- Prebuilt Reasoning + Acting agent pattern with tool execution.
 - **OpenAI Provider** -- Integration with OpenAI-compatible APIs (GPT-4o, Ollama, vLLM, DeepSeek, etc.).
+## Projects Built with langgraph-rust
+
+- [flock](https://github.com/Onelevenvy/flock) - A multi-agent framework built on top of langgraph-rust.
 
 ## Project Structure
 
@@ -124,9 +128,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 use langgraph::prelude::*;
+use langgraph_derive::langgraph_state;
 use langgraph::channels::binop::append_reducer;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[langgraph_state]
+#[derive(Debug)]
 struct MyState {
     #[channel(reducer = "append_reducer")]
     steps: Vec<String>,
@@ -134,22 +140,26 @@ struct MyState {
 }
 
 // Build graph: START -> process -> validate -> END
-let mut graph = StateGraph::<MyState>::new();
-graph.add_node("process", |state: &MyState| {
-    let mut next = state.clone();
-    next.steps.push("processed".into());
-    next.result = "done".into();
-    next
-});
-graph.add_node("validate", |state: &MyState| {
-    let mut next = state.clone();
-    next.steps.push("validated".into());
-    next
-});
-graph.add_edge(START, "process");
-graph.add_edge("process", "validate");
-graph.add_edge("validate", END);
-graph.compile();
+let channels = MyState::create_channels();
+let mut graph = StateGraph::new(channels);
+
+graph.add_node("process", node_fn!(|input, _config| {
+    Ok(serde_json::json!({
+        "steps": vec!["processed"],
+        "result": "done"
+    }))
+}))?;
+
+graph.add_node("validate", node_fn!(|input, _config| {
+    Ok(serde_json::json!({
+        "steps": vec!["validated"]
+    }))
+}))?;
+
+graph.add_edge(START, "process")?;
+graph.add_edge("process", "validate")?;
+graph.add_edge("validate", END)?;
+let app = graph.compile()?;
 ```
 
 ### Human-in-the-Loop
@@ -190,7 +200,7 @@ compiled_graph.update_state(
 
 ### Providers
 
-- [ ] Anthropic (Claude)
+- [x] Anthropic (Claude)
 - [ ] DeepSeek
 - [ ] Google Gemini
 - [ ] Qwen 
