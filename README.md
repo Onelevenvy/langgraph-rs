@@ -29,7 +29,7 @@ langgraph-rust brings the core LangGraph concepts into idiomatic Rust:
 - **OpenAI Provider** -- Integration with OpenAI-compatible APIs (GPT-4o, Ollama, vLLM, DeepSeek, etc.).
 ## Projects Built with langgraph-rust
 
-- [flock](https://github.com/Onelevenvy/flock) - A multi-agent framework built on top of langgraph-rust.
+- [flock](https://github.com/Onelevenvy/flock) [![GitHub stars](https://img.shields.io/github/stars/Onelevenvy/flock?style=social)](https://github.com/Onelevenvy/flock) - A multi-agent framework built on top of langgraph-rust.
 
 ## Project Structure
 
